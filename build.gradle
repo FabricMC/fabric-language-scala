@@ -21,6 +21,8 @@ plugins {
 
 apply plugin: "net.fabricmc.loom"
 
+rootProject.name = project.name
+
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
