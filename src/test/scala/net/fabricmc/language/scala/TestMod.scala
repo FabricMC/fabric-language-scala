@@ -16,15 +16,15 @@
 
 package net.fabricmc.language.scala
 
-import net.fabricmc.base.loader.Init
+import net.fabricmc.api.ModInitializer
+import net.minecraft.block.Blocks
 
-object TestMod {
+object TestMod extends ModInitializer {
 
-	@Init
-	def init(): Unit = {
+	override def onInitialize(): Unit = {
 		System.out.println("**********************")
 		System.out.println("Hello from Scala!")
+		System.out.println("Hello " + Blocks.DIRT)
 		System.out.println("**********************")
 	}
-
 }

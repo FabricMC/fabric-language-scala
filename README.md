@@ -22,10 +22,8 @@ Add a dependency entry to your `mod.json` file:
 
 ```json
 {
-	"dependencies": {
-		"net.fabricmc.language.scala": {
-			"version": ">=0.1.0"
-		}
-	}
+    "requires": {
+        "fabric-language-scala": "*"
+    }
 }
 ```

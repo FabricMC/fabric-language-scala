@@ -7,7 +7,7 @@ buildscript {
 		}
 	}
 	dependencies {
-		classpath "net.fabricmc:fabric-loom:0.0.12-SNAPSHOT"
+		classpath "net.fabricmc:fabric-loom:0.1.0-SNAPSHOT"
 	}
 }
 
@@ -15,6 +15,7 @@ plugins {
 	id "scala"
 	id "idea"
 	id "maven"
+	id "maven-publish"
 	id "com.github.johnrengelman.shadow" version "2.0.4"
 	id "net.minecrell.licenser" version "0.4.1"
 }
@@ -26,14 +27,6 @@ archivesBaseName = modid
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
-apply from: 'https://github.com/FabricMC/fabric-docs/raw/master/gradle/maven.gradle'
-
-minecraft {
-	version = mc_version
-	fabricVersion = fabric_version
-	pomfVersion = pomf_version
-}
-
 license {
 	header file("HEADER")
 	include "**/*.scala"
@@ -43,17 +36,65 @@ repositories {
 	jcenter()
 }
 
+configurations {
+	shadow
+	compile.extendsFrom shadow
+}
+
 dependencies {
-	runtime "org.scala-lang:scala-library:${scala_version}"
-	compile "org.scala-lang:scala-library:${scala_version}"
+	minecraft "com.mojang:minecraft:18w50a"
+	mappings "net.fabricmc:yarn:18w50a.35"
+	modCompile "net.fabricmc:fabric-loader:0.2.0.70"
+
+	//These are the deps included with the scala adapter, if you think you have a good dep that would be a nice fit please open an issue.
+	shadow "org.scala-lang:scala-library:${scala_version}"
+	shadow "org.scala-lang:scala-reflect:${scala_version}"
+	shadow "org.scala-lang:scala-compiler:${scala_version}"
+	shadow "org.scala-lang.modules:scala-swing_2.12:${scala_swing_version}"
+}
+
+processResources {
+	from(sourceSets.main.resources.srcDirs) {
+		include 'mod.json'
+		expand version: project.version
+	}
+	from(sourceSets.main.resources.srcDirs) {
+		exclude 'mod.json'
+	}
 }
 
 shadowJar {
-	classifier = ""
+	classifier = "fat"
+	configurations = [project.configurations.shadow]
+	exclude("META-INF")
 }
 
 tasks.build.dependsOn shadowJar
 
-artifacts {
-	archives shadowJar
+
+publishing {
+	publications {
+		maven(MavenPublication) {
+			groupId project.group
+			artifactId project.archivesBaseName
+			version project.version
+
+			from components.java
+
+			artifact shadowJar {
+				classifier "fat"
+			}
+		}
+	}
+	repositories {
+		maven {
+			url "http://mavenupload.modmuss50.me/"
+			if (project.hasProperty('mavenPass')) {
+				credentials {
+					username 'buildslave'
+					password project.getProperty('mavenPass')
+				}
+			}
+		}
+	}
 }

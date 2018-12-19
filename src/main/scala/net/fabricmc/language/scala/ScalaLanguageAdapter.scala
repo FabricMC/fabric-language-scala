@@ -17,14 +17,15 @@
 package net.fabricmc.language.scala
 
 
-import net.fabricmc.loader.language.ILanguageAdapter
+import net.fabricmc.loader.language.LanguageAdapter
+import net.fabricmc.loader.language.LanguageAdapter.Options
 import org.apache.logging.log4j.LogManager
 
-class ScalaLanguageAdapter extends ILanguageAdapter {
+class ScalaLanguageAdapter extends LanguageAdapter {
 
 	private val logger = LogManager.getFormatterLogger("ScalaLanguageAdapter")
 
-	override def createInstance(clazz: Class[_]): AnyRef = {
+	override def createInstance(clazz: Class[_], options: Options): AnyRef = {
 		try {
 			val objectClass = Class.forName(clazz.getName + "$")
 			val moduleField = objectClass.getField("MODULE$")
