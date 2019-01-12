@@ -6,7 +6,7 @@ Add it as a dependency:
 
 ```groovy
 dependencies {
-	compile "net.fabricmc:fabric-language-scala:0.1.0"
+	compile "net.fabricmc:fabric-language-scala:0.1.0.+"
 }
 ```
 
