@@ -48,9 +48,9 @@ configurations {
 }
 
 dependencies {
-	minecraft "com.mojang:minecraft:18w50a"
-	mappings "net.fabricmc:yarn:18w50a.35"
-	modCompile "net.fabricmc:fabric-loader:0.2.0.70"
+	minecraft "com.mojang:minecraft:1.14 Pre-Release 1"
+	mappings "net.fabricmc:yarn:1.14 Pre-Release 1+build.6"
+	modCompile "net.fabricmc:fabric-loader:0.4.0+build.121"
 
 	//These are the deps included with the scala adapter, if you think you have a good dep that would be a nice fit please open an issue.
 	shadow "org.scala-lang:scala-library:${scala_version}"
