@@ -17,28 +17,26 @@
 package net.fabricmc.language.scala
 
 
-import net.fabricmc.loader.language.LanguageAdapter
-import net.fabricmc.loader.language.LanguageAdapter.Options
+import net.fabricmc.loader.api.{LanguageAdapter, ModContainer}
 import org.apache.logging.log4j.LogManager
 
 class ScalaLanguageAdapter extends LanguageAdapter {
 
-	private val logger = LogManager.getFormatterLogger("ScalaLanguageAdapter")
+  private val logger = LogManager.getFormatterLogger("ScalaLanguageAdapter")
 
-	override def createInstance(clazz: Class[_], options: Options): AnyRef = {
-		try {
-			val objectClass = Class.forName(clazz.getName + "$")
-			val moduleField = objectClass.getField("MODULE$")
-			val instance = moduleField.get(null)
-			if (instance == null) throw new NullPointerException
-			logger.debug(s"Found ${clazz.getName}$$MODULE$$")
-			instance
-		} catch {
-			case e: Exception => {
-				logger.error(s"Unable to find ${clazz.getName}$$MODULE$$")
-				clazz.newInstance().asInstanceOf[AnyRef]
-			}
-		}
-	}
-
+  override def create[T](modContainer: ModContainer, s: String, aClass: Class[T]): T = {
+    try {
+      val objectClass = Class.forName(aClass.getName + "$")
+      val moduleField = objectClass.getField("MODULE$")
+      val instance = moduleField.get(null).asInstanceOf[T]
+      if (instance == null) throw new NullPointerException
+      logger.debug(s"Found ${aClass.getName}$$MODULE$$")
+      instance
+    } catch {
+      case _: Exception => {
+        logger.error(s"Unable to find ${aClass.getName}$$MODULE$$")
+        aClass.newInstance()
+      }
+    }
+  }
 }
