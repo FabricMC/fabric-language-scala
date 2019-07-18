@@ -1,6 +1,10 @@
 {
+  "schemaVersion": 1,
   "id": "$archives_base_name",
   "name": "Fabric Language Scala",
   "description": "Fabric language module for Scala.",
-  "version": "$version"
+  "version": "$version",
+  "languageAdapters": {
+    "scala": "net.fabricmc.language.scala.ScalaLanguageAdapter"
+  }
 }
