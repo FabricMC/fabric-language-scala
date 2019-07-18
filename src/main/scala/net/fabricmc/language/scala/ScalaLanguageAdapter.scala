@@ -33,10 +33,9 @@ class ScalaLanguageAdapter extends LanguageAdapter {
       logger.debug(s"Found ${aClass.getName}$$MODULE$$")
       instance
     } catch {
-      case _: Exception => {
+      case _: Exception =>
         logger.error(s"Unable to find ${aClass.getName}$$MODULE$$")
         aClass.newInstance()
-      }
     }
   }
 }
