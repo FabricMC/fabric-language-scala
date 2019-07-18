@@ -26,7 +26,7 @@ class ScalaLanguageAdapter extends LanguageAdapter {
 
   override def create[T](modContainer: ModContainer, s: String, aClass: Class[T]): T = {
     try {
-      val objectClass = Class.forName(aClass.getName + "$")
+      val objectClass = Class.forName(s + "$")
       val moduleField = objectClass.getField("MODULE$")
       val instance = moduleField.get(null).asInstanceOf[T]
       if (instance == null) throw new NullPointerException
