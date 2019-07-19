@@ -53,22 +53,40 @@ processResources {
 }
 
 shadowJar {
+	classifier = "fat"
     configurations = [project.configurations.shadow]
     exclude("META-INF")
 }
 
-tasks.remapJar {
-    delegate.dependsOn tasks.shadowJar
-    delegate.jar = shadowJar.archivePath
+build.dependsOn shadowJar
+
+task sourcesJar(type: Jar, dependsOn: classes) {
+	classifier = "sources"
+	from sourceSets.main.allSource
 }
 
 
 publishing {
     publications {
         maven(MavenPublication) {
-            artifact(remapJar.jar) {
+            artifact(jar) {
                 builtBy remapJar
             }
+			artifact(sourcesJar) {
+				builtBy remapSourcesJar
+			}
+			pom.withXml {
+				def depsNode = asNode().appendNode('dependencies')
+
+				configurations.shadow.dependencies.stream()
+					.each {
+						def depNode = depsNode.appendNode('dependency')
+						depNode.appendNode('groupId', it.group)
+						depNode.appendNode('artifactId', it.name)
+						depNode.appendNode('version', it.version)
+						depNode.appendNode('scope', 'compile')
+					}
+			}
         }
     }
     repositories {
