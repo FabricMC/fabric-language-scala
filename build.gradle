@@ -59,7 +59,7 @@ shadowJar {
 
 tasks.remapJar {
     delegate.dependsOn tasks.shadowJar
-    delegate.jar = shadowJar.archivePath
+    delegate.input = shadowJar.archivePath
 }
 
 
