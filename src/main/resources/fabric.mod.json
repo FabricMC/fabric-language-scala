@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "id": "$archives_base_name",
+  "id": "fabric-language-scala",
   "name": "Fabric Language Scala",
   "description": "Fabric language module for Scala.",
   "version": "$version",
