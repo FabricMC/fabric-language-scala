@@ -35,7 +35,7 @@ class ScalaLanguageAdapter extends LanguageAdapter {
     } catch {
       case _: Exception =>
         logger.error(s"Unable to find ${aClass.getName}$$MODULE$$")
-        aClass.getConstructor().newInstance()
+        aClass.newInstance()
     }
   }
 }
