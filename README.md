@@ -6,19 +6,24 @@ Add it as a dependency:
 
 ```groovy
 dependencies {
-	compile "net.fabricmc:fabric-language-scala:0.1.0.+"
+	modImplementation "net.fabricmc:fabric-language-scala:0.3.0.+"
 }
 ```
 
-Set the language adapter for your mod to use by setting the `languageAdapter` property in the `mod.json` file:
+Specify your entrypoint in your `fabric.mod.json` like so:
 
 ```json
-{
-    "languageAdapter": "net.fabricmc.language.scala.ScalaLanguageAdapter"
+"entrypoints": {
+    "main": [
+        {
+            "adapter": "scala",
+            "value": "package.ClassName"
+        }
+    ]
 }
 ```
 
-Add a dependency entry to your `mod.json` file:
+Add a dependency entry to your `fabric.mod.json` file:
 
 ```json
 {
