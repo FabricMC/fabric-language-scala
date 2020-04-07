@@ -18,11 +18,8 @@ package net.fabricmc.language.scala
 
 
 import net.fabricmc.loader.api.{LanguageAdapter, ModContainer}
-import org.apache.logging.log4j.LogManager
 
 class ScalaLanguageAdapter extends LanguageAdapter {
-
-  private val logger = LogManager.getFormatterLogger("ScalaLanguageAdapter")
 
   override def create[T](modContainer: ModContainer, s: String, aClass: Class[T]): T = {
     try {
@@ -30,11 +27,10 @@ class ScalaLanguageAdapter extends LanguageAdapter {
       val moduleField = objectClass.getField("MODULE$")
       val instance = moduleField.get(null).asInstanceOf[T]
       if (instance == null) throw new NullPointerException
-      logger.debug(s"Found ${aClass.getName}$$MODULE$$")
       instance
     } catch {
       case _: Exception =>
-        logger.error(s"Unable to find ${aClass.getName}$$MODULE$$")
+        println(s"Unable to find ${aClass.getName}$$MODULE$$")
         aClass.newInstance()
     }
   }
