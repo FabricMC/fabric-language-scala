@@ -3,10 +3,10 @@ plugins {
     id "scala"
     id "maven"
     id "maven-publish"
-    id 'fabric-loom' version '0.2.6-SNAPSHOT'
+    id 'fabric-loom' version '0.6-SNAPSHOT'
     id "com.github.ben-manes.versions" version "0.21.0"
-    id "com.github.johnrengelman.shadow" version "5.0.0"
-    id "com.matthewprenger.cursegradle" version "1.2.0"
+    id "com.github.johnrengelman.shadow" version "6.1.0"
+    id "com.matthewprenger.cursegradle" version "1.4.0"
 }
 
 sourceCompatibility = JavaVersion.VERSION_1_8
@@ -15,12 +15,11 @@ targetCompatibility = JavaVersion.VERSION_1_8
 archivesBaseName = project.archives_base_name
 group = project.maven_group
 
-def baseVersion = project.mod_version
+version = mod_version
 def ENV = System.getenv()
-version = baseVersion + "." + (ENV.BUILD_NUMBER ?: "local")
+version = version + (ENV.GITHUB_ACTIONS ? "" : "+local")
 
 repositories {
-    jcenter()
     maven {
         url = "http://maven.fabricmc.net/"
         name = "Fabric"
@@ -36,19 +35,17 @@ dependencies {
     shadow "org.scala-lang:scala-library:${project.scala_version}"
     shadow "org.scala-lang:scala-reflect:${project.scala_version}"
     shadow "org.scala-lang:scala-compiler:${project.scala_version}"
+	shadow "org.scala-lang.modules:scala-java8-compat_2.13:0.9.1"
 
     testCompile "org.scala-lang:scala-library:${project.scala_version}"
 }
 
 processResources {
-    inputs.properties "version": project.version,
-            "archives_base_name": project.archives_base_name
+	inputs.property "version", project.version
 
-    from(sourceSets.main.resources.srcDirs) {
-        include 'fabric.mod.json'
-        expand "version": project.version,
-                "archives_base_name": project.archives_base_name
-    }
+	filesMatching("fabric.mod.json") {
+		expand "version": project.version
+	}
 }
 
 shadowJar {
@@ -89,42 +86,54 @@ publishing {
         }
     }
     repositories {
-        maven {
-            url "http://mavenupload.modmuss50.me/"
-            if (project.hasProperty('mavenPass')) {
-                credentials {
-                    username 'buildslave'
-                    password project.getProperty('mavenPass')
-                }
-            }
-        }
+		repositories {
+			if (ENV.MAVEN_URL) {
+				maven {
+					url ENV.MAVEN_URL
+					credentials {
+						username ENV.MAVEN_USERNAME
+						password ENV.MAVEN_PASSWORD
+					}
+				}
+			}
+		}
     }
 }
 
 curseforge {
-    if (project.hasProperty('curse_api_key')) {
-        apiKey = project.getProperty('curse_api_key')
-    }
+	if (ENV.CURSEFORGE_API_KEY) {
+		apiKey = ENV.CURSEFORGE_API_KEY
+	}
+
     project {
         id = '309275'
         changelog = 'A changelog can be found at https://github.com/FabricMC/fabric-language-scala/commits/master'
         releaseType = 'release'
-        addGameVersion '1.16-Snapshot'
+        addGameVersion '1.16.5'
 		addGameVersion '1.15.2'
 		addGameVersion '1.14.4'
+
         mainArtifact(shadowJar) {
-            displayName = "Fabric Language Scala $baseVersion build $ENV.BUILD_NUMBER"
+            displayName = "Fabric Language Scala $version"
         }
     }
+
     options {
         forgeGradleIntegration = false
     }
 }
 
-apply from: 'https://github.com/FabricMC/fabric-docs/raw/master/gradle/license.gradle'
-apply from: 'https://github.com/FabricMC/fabric-docs/raw/master/gradle/ideconfig.gradle'
-
-license {
-    header file("HEADER")
-    include "**/*.scala"
+// A task to ensure that the version being released has not already been released.
+task checkVersion {
+	doFirst {
+		def xml = new URL("https://maven.fabricmc.net/net/fabricmc/fabric-language-scala/maven-metadata.xml").text
+		def metadata = new XmlSlurper().parseText(xml)
+		def versions = metadata.versioning.versions.version*.text();
+		if (versions.contains(version)) {
+			throw new RuntimeException("${version} has already been released!")
+		}
+	}
 }
+
+publish.mustRunAfter checkVersion
+project.tasks.curseforge.mustRunAfter checkVersion
