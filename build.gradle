@@ -1,11 +1,10 @@
 plugins {
     id "java"
     id "scala"
-    id "maven"
     id "maven-publish"
-    id 'fabric-loom' version '0.6-SNAPSHOT'
+    id 'fabric-loom' version '0.7-SNAPSHOT'
     id "com.github.ben-manes.versions" version "0.21.0"
-    id "com.github.johnrengelman.shadow" version "6.1.0"
+    id "com.github.johnrengelman.shadow" version "7.0.0"
     id "com.matthewprenger.cursegradle" version "1.4.0"
 }
 
@@ -17,14 +16,7 @@ group = project.maven_group
 
 version = mod_version
 def ENV = System.getenv()
-version = version + (ENV.GITHUB_ACTIONS ? "" : "+local")
-
-repositories {
-    maven {
-        url = "http://maven.fabricmc.net/"
-        name = "Fabric"
-    }
-}
+version = version + "+scala." + project.scala_version + (ENV.GITHUB_ACTIONS ? "" : ".local")
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
@@ -35,9 +27,9 @@ dependencies {
     shadow "org.scala-lang:scala-library:${project.scala_version}"
     shadow "org.scala-lang:scala-reflect:${project.scala_version}"
     shadow "org.scala-lang:scala-compiler:${project.scala_version}"
-	shadow "org.scala-lang.modules:scala-java8-compat_2.13:0.9.1"
+	shadow "org.scala-lang.modules:scala-java8-compat_2.13:1.0.0"
 
-    testCompile "org.scala-lang:scala-library:${project.scala_version}"
+    testImplementation "org.scala-lang:scala-library:${project.scala_version}"
 }
 
 processResources {
@@ -109,6 +101,7 @@ curseforge {
         id = '309275'
         changelog = 'A changelog can be found at https://github.com/FabricMC/fabric-language-scala/commits/master'
         releaseType = 'release'
+		addGameVersion '1.17.1'
         addGameVersion '1.16.5'
 		addGameVersion '1.15.2'
 		addGameVersion '1.14.4'
