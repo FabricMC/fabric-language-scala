@@ -1,10 +1,8 @@
 plugins {
-    id "java"
+    id "java-library"
     id "scala"
     id "maven-publish"
-    id 'fabric-loom' version '0.7-SNAPSHOT'
-    id "com.github.ben-manes.versions" version "0.21.0"
-    id "com.github.johnrengelman.shadow" version "7.0.0"
+    id 'fabric-loom' version '0.10.30'
     id "com.matthewprenger.cursegradle" version "1.4.0"
 }
 
@@ -23,13 +21,7 @@ dependencies {
     mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
 	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
-    //These are the deps included with the scala adapter, if you think you have a good dep that would be a nice fit please open an issue.
-    shadow "org.scala-lang:scala-library:${project.scala_version}"
-    shadow "org.scala-lang:scala-reflect:${project.scala_version}"
-    shadow "org.scala-lang:scala-compiler:${project.scala_version}"
-	shadow "org.scala-lang.modules:scala-java8-compat_2.13:1.0.0"
-
-    testImplementation "org.scala-lang:scala-library:${project.scala_version}"
+	include(api("org.scala-lang:scala3-library_3:${project.scala_version}"))
 }
 
 processResources {
@@ -40,19 +32,10 @@ processResources {
 	}
 }
 
-shadowJar {
-	classifier = "fat"
-    configurations = [project.configurations.shadow]
-    exclude("META-INF")
-}
-
-build.dependsOn shadowJar
-
 task sourcesJar(type: Jar, dependsOn: classes) {
-	classifier = "sources"
+	archiveClassifier = "sources"
 	from sourceSets.main.allSource
 }
-
 
 publishing {
     publications {
@@ -106,7 +89,7 @@ curseforge {
 		addGameVersion '1.15.2'
 		addGameVersion '1.14.4'
 
-        mainArtifact(shadowJar) {
+        mainArtifact(file("${project.buildDir}/libs/${base.archivesBaseName}-${version}.jar")) {
             displayName = "Fabric Language Scala $version"
         }
     }
