@@ -32,32 +32,14 @@ processResources {
 	}
 }
 
-task sourcesJar(type: Jar, dependsOn: classes) {
-	archiveClassifier = "sources"
-	from sourceSets.main.allSource
+java {
+	withSourcesJar()
 }
 
 publishing {
     publications {
         maven(MavenPublication) {
-            artifact(remapJar) {
-                builtBy remapJar
-            }
-			artifact(sourcesJar) {
-				builtBy remapSourcesJar
-			}
-			pom.withXml {
-				def depsNode = asNode().appendNode('dependencies')
-
-				configurations.shadow.dependencies.stream()
-					.each {
-						def depNode = depsNode.appendNode('dependency')
-						depNode.appendNode('groupId', it.group)
-						depNode.appendNode('artifactId', it.name)
-						depNode.appendNode('version', it.version)
-						depNode.appendNode('scope', 'compile')
-					}
-			}
+			from components.java
         }
     }
     repositories {
@@ -88,6 +70,7 @@ curseforge {
         addGameVersion '1.16.5'
 		addGameVersion '1.15.2'
 		addGameVersion '1.14.4'
+		addGameVersion "Fabric"
 
         mainArtifact(file("${project.buildDir}/libs/${base.archivesBaseName}-${version}.jar")) {
             displayName = "Fabric Language Scala $version"
