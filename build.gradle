@@ -1,29 +1,27 @@
 plugins {
-    id "java-library"
-    id "scala"
-    id "maven-publish"
-    id 'fabric-loom' version '0.10.30'
-    id "com.matthewprenger.cursegradle" version "1.4.0"
+	id 'java-library'
+	id 'scala'
+	id 'maven-publish'
+	id 'fabric-loom' version '1.5-SNAPSHOT'
 }
 
-sourceCompatibility = JavaVersion.VERSION_1_8
-targetCompatibility = JavaVersion.VERSION_1_8
+sourceCompatibility = JavaVersion.VERSION_17
+targetCompatibility = JavaVersion.VERSION_17
 
 archivesBaseName = project.archives_base_name
 group = project.maven_group
 
-version = mod_version
-def ENV = System.getenv()
-version = version + "+scala." + project.scala_version + (ENV.GITHUB_ACTIONS ? "" : ".local")
+version = mod_version + "+scala." + project.scala_version + (System.getenv('GITHUB_ACTIONS') ? "" : ".local")
 
 dependencies {
-    minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
 	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
-	include(api("org.scala-lang:scala3-library_3:${project.scala_version}"))
-	// Depended on by scala3
-	include(api("org.scala-lang:scala-library:2.13.6"))
+	// Scala Dependencies
+	implementation "org.scala-lang:scala3-library_3:${project.scala_version}"
+	implementation "org.scala-lang:scala-reflect:${project.scala_reflect_version}"
+	implementation "org.scala-lang.modules:scala-xml_3:${project.scala_xml_version}"// might be unnecessary but wtv
 }
 
 processResources {
@@ -39,49 +37,22 @@ java {
 }
 
 publishing {
-    publications {
-        maven(MavenPublication) {
+	publications {
+		maven(MavenPublication) {
 			from components.java
-        }
-    }
-    repositories {
-		repositories {
-			if (ENV.MAVEN_URL) {
-				maven {
-					url ENV.MAVEN_URL
-					credentials {
-						username ENV.MAVEN_USERNAME
-						password ENV.MAVEN_PASSWORD
-					}
+		}
+	}
+	repositories {
+		if (System.getenv('MAVEN_URL')) {
+			maven {
+				url System.getenv('MAVEN_URL')
+				credentials {
+					username System.getenv('MAVEN_USERNAME')
+					password System.getenv('MAVEN_PASSWORD')
 				}
 			}
 		}
-    }
-}
-
-curseforge {
-	if (ENV.CURSEFORGE_API_KEY) {
-		apiKey = ENV.CURSEFORGE_API_KEY
 	}
-
-    project {
-        id = '309275'
-        changelog = 'A changelog can be found at https://github.com/FabricMC/fabric-language-scala/commits/master'
-        releaseType = 'release'
-		addGameVersion '1.17.1'
-        addGameVersion '1.16.5'
-		addGameVersion '1.15.2'
-		addGameVersion '1.14.4'
-		addGameVersion "Fabric"
-
-        mainArtifact(file("${project.buildDir}/libs/${base.archivesBaseName}-${version}.jar")) {
-            displayName = "Fabric Language Scala $version"
-        }
-    }
-
-    options {
-        forgeGradleIntegration = false
-    }
 }
 
 // A task to ensure that the version being released has not already been released.
@@ -95,6 +66,3 @@ task checkVersion {
 		}
 	}
 }
-
-publish.mustRunAfter checkVersion
-project.tasks.curseforge.mustRunAfter checkVersion
