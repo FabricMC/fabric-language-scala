@@ -19,6 +19,7 @@ package net.fabricmc.language.scala
 import net.fabricmc.api.ModInitializer
 import net.minecraft.block.Blocks
 
+object TestMod extends ModInitializer {
 	override def onInitialize(): Unit = {
 		val message = """
 				|**********************
