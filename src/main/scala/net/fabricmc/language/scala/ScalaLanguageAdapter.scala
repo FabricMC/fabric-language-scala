@@ -16,20 +16,21 @@
 
 package net.fabricmc.language.scala
 
-
 import net.fabricmc.loader.api.{LanguageAdapter, ModContainer}
+
+import scala.util.{Failure, Success, Try}
 
 class ScalaLanguageAdapter extends LanguageAdapter {
 
   override def create[T](modContainer: ModContainer, s: String, aClass: Class[T]): T = {
-    try {
+    Try {
       val objectClass = Class.forName(s + "$")
       val moduleField = objectClass.getField("MODULE$")
       val instance = moduleField.get(null).asInstanceOf[T]
-      if (instance == null) throw new NullPointerException
-      instance
-    } catch {
-      case _: Exception =>
+      Option(instance).getOrElse(throw new NullPointerException)
+    } match {
+      case Success(instance) => instance
+      case Failure(_) =>
         println(s"Unable to find ${aClass.getName}$$MODULE$$")
         aClass.getConstructor().newInstance()
     }

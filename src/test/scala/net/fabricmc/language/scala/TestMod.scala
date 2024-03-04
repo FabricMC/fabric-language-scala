@@ -20,11 +20,13 @@ import net.fabricmc.api.ModInitializer
 import net.minecraft.block.Blocks
 
 object TestMod extends ModInitializer {
-
 	override def onInitialize(): Unit = {
-		System.out.println("**********************")
-		System.out.println("Hello from Scala!")
-		System.out.println("Hello " + Blocks.DIRT)
-		System.out.println("**********************")
+		val message = """
+				|**********************
+			        |Hello from Scala!
+			        |Hello ${Blocks.DIRT}!
+				|**********************
+				|""".stripMargin
+		println(message)
 	}
 }
