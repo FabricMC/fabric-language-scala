@@ -19,8 +19,6 @@ dependencies {
 
 	// Scala Dependencies
 	implementation "org.scala-lang:scala3-library_3:${project.scala_version}"
-	implementation "org.scala-lang:scala-reflect:${project.scala_reflect_version}"
-	implementation "org.scala-lang.modules:scala-xml_3:${project.scala_xml_version}"// might be unnecessary but wtv
 }
 
 processResources {
