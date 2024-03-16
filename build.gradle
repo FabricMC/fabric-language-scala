@@ -3,7 +3,6 @@ plugins {
 	id 'scala'
 	id 'maven-publish'
 	id 'fabric-loom' version '1.5-SNAPSHOT'
-	id "com.github.johnrengelman.shadow" version "8.1.1"
 }
 
 sourceCompatibility = JavaVersion.VERSION_1_8
@@ -19,9 +18,9 @@ dependencies {
 	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
 	// Scala Dependencies
-	implementation(shadow("org.scala-lang:scala3-library_3:${project.scala_version}"))
+	modApi(include("org.scala-lang:scala3-library_3:${project.scala_version}"))
 	// Dependent by Scala3
-	implementation(shadow("org.scala-lang:scala-library:2.13.12"))
+	modApi(include("org.scala-lang:scala-library:2.13.12"))
 }
 
 processResources {
@@ -32,23 +31,20 @@ processResources {
 	}
 }
 
-shadowJar {
-	configurations = [project.configurations.shadow]
-    exclude("META-INF")
-}
-
-build.dependsOn shadowJar
-
 java {
 	withSourcesJar()
 }
 
 publishing {
-  	publications {
-    	shadow(MavenPublication) { publication ->
-      		project.shadow.component(publication)
-    	}
-  	}
+    publications {
+        mavenJava(MavenPublication) {
+            groupId = project.group
+            artifactId = project.name.toLowerCase()
+            version = project.version
+
+            from components.java
+        }
+    }
 	repositories {
 		if (System.getenv('MAVEN_URL')) {
 			maven {
