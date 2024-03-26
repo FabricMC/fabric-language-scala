@@ -18,9 +18,9 @@ dependencies {
 	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
 	// Scala Dependencies
-	modApi(include("org.scala-lang:scala3-library_3:${project.scala_version}"))
+	api(include("org.scala-lang:scala3-library_3:${project.scala_version}"))
 	// Dependent by Scala3
-	modApi(include("org.scala-lang:scala-library:2.13.12"))
+	api(include("org.scala-lang:scala-library:2.13.12"))
 }
 
 processResources {
