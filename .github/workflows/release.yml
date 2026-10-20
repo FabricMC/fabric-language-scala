@@ -1,18 +1,70 @@
 name: Release
-on: [workflow_dispatch] # Manual trigger
+on: [workflow_dispatch]
+permissions:
+  contents: write
+concurrency:
+  group: official-release
+  cancel-in-progress: false
+
 jobs:
-  build:
-    runs-on: ubuntu-20.04
-    container:
-      image: openjdk:17-jdk
-      options: --user root
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      LIBGL_ALWAYS_SOFTWARE: '1'
     steps:
-      - uses: actions/checkout@v1
-      - uses: gradle/wrapper-validation-action@v1
-      - run: chmod +x ./gradlew
-      - run: ./gradlew checkVersion build publish curseforge --stacktrace --warning-mode fail
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v6
+        id: java17
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: actions/setup-java@v6
+        id: java21
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 25
+      - uses: gradle/actions/wrapper-validation@v6
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Install virtual display and software graphics
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1-mesa-dri mesa-vulkan-drivers
+      - name: Check generated documentation
+        run: |
+          ./gradlew processMDTemplates --warning-mode fail
+          git diff --exit-code -- README.md examples/scala-mod/gradle.properties
+      - uses: FabricMC/fabric-action-scripts@v3
+        id: changelog
+        with:
+          context: changelog
+          workflow_id: release.yml
+      - name: Validate and publish
+        run: >-
+          ./gradlew publishMods publish -PpublishRelease --warning-mode fail --stacktrace
+          -Dorg.gradle.java.installations.paths="${{ steps.java17.outputs.path }},${{ steps.java21.outputs.path }}"
         env:
           MAVEN_URL: ${{ secrets.MAVEN_URL }}
           MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
           CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MODRINTH_PROJECT_ID: ${{ vars.MODRINTH_PROJECT_ID }}
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+          CHANGELOG: ${{ steps.changelog.outputs.changelog }}
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: Release-validation
+          path: |
+            build/libs/
+            build/reports/
+            build/smoke/**/logs/
+            build/smoke/**/crash-reports/
+            build/smoke/**/*.passed

@@ -1,0 +1,23 @@
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directories:
+      - /
+      - /examples/scala-mod
+    schedule:
+      interval: weekly
+    groups:
+      build-tools:
+        patterns: ['*']
+    ignore:
+      # Scala updates also advance mod_version through the Update Scala workflow.
+      - dependency-name: 'org.scala-lang:*'
+      # Loader's Maven release field does not indicate Fabric's stable channel.
+      - dependency-name: 'net.fabricmc:fabric-loader*'
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']

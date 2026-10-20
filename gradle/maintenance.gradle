@@ -1,0 +1,165 @@
+import groovy.json.JsonSlurper
+import groovy.xml.XmlSlurper
+import java.nio.ByteBuffer
+import java.nio.charset.StandardCharsets
+import java.util.zip.ZipFile
+import java.util.zip.ZipInputStream
+
+def verifyArtifact(File artifact, String scalaVersion, String modVersion, String loaderVersion, File pomFile) {
+    def json = new JsonSlurper()
+    new ZipFile(artifact).withCloseable { jar ->
+        def metadata = json.parse(jar.getInputStream(jar.getEntry('fabric.mod.json')))
+        assert metadata.schemaVersion == 1
+        assert metadata.id == 'fabric-language-scala'
+        assert metadata.version == modVersion
+        assert metadata.depends == [fabricloader: ">=${loaderVersion}".toString(), java: '>=17']
+        assert metadata.languageAdapters == [scala: 'net.fabricmc.language.scala.ScalaLanguageAdapter']
+        def names = jar.entries().collect { it.name }.toSet()
+        assert names.contains('LICENSE_fabric-language-scala'): 'Missing project license'
+        def adapter = jar.getInputStream(jar.getEntry('net/fabricmc/language/scala/ScalaLanguageAdapter.class'))
+                .withCloseable { it.readAllBytes() }
+        assert (ByteBuffer.wrap(adapter).getShort(6) & 0xffff) == 61: 'Adapter must target Java 17'
+        def nestedPaths = metadata.jars.collect { it.file }
+        def expected = ["scala-library-${scalaVersion}.jar".toString(), "scala3-library_3-${scalaVersion}.jar".toString()].toSet()
+        assert nestedPaths.size() == expected.size(): 'Duplicate bundled libraries'
+        assert nestedPaths.collect { new File(it).name }.toSet() == expected: 'Unexpected bundled libraries'
+        assert nestedPaths.toSet() == names.findAll { it.endsWith('.jar') }.toSet(): 'Unlisted nested JAR'
+        def classes = [] as Set
+        nestedPaths.each { path ->
+            new ZipInputStream(jar.getInputStream(jar.getEntry(path))).withCloseable { library ->
+                boolean foundMetadata = false
+                def entry
+                while ((entry = library.nextEntry) != null) {
+                    classes.add(entry.name)
+                    if (entry.name == 'fabric.mod.json') {
+                        def nested = json.parseText(new String(library.readAllBytes(), StandardCharsets.UTF_8))
+                        assert nested.version == scalaVersion: 'Wrong nested library version'
+                        foundMetadata = true
+                    }
+                }
+                assert foundMetadata: "Missing nested library metadata: ${path}"
+            }
+        }
+        assert classes.containsAll(['scala/MatchError.class', 'scala/Predef$.class']): 'Missing Scala runtime'
+        (names + classes).each { name ->
+            assert !['scala/tools/', 'dotty/tools/', 'xsbti/', 'com/sun/jna/'].any { name.startsWith(it) }:
+                    "Build tooling or native library bundled: ${name}"
+        }
+        assert !names.any { it.startsWith('scala/') }: 'Runtime must stay nested'
+    }
+    def pom = new XmlSlurper().parse(pomFile)
+    def libraries = pom.dependencies.dependency.findAll { it.groupId.text() == 'org.scala-lang' }
+            .collectEntries { [(it.artifactId.text()): [it.version.text(), it.scope.text()]] }
+    assert libraries == ['scala-library': [scalaVersion, 'compile'], 'scala3-library_3': [scalaVersion, 'compile']]:
+            'Maven consumers must receive both aligned Scala runtime dependencies'
+}
+
+def checkVersion(String version, String metadata) {
+    def root = new XmlSlurper().parseText(metadata)
+    def released = root.versioning.versions.version.collect { it.text() }
+    if (root.name() != 'metadata' || released.isEmpty() || released.any { !it }) {
+        throw new GradleException('Invalid or empty Maven release metadata')
+    }
+    if (released.contains(version)) throw new GradleException("${version} has already been released")
+    def base = version.split('\\+', 2)[0]
+    if (released.any { it.split('\\+', 2)[0] == base }) {
+        throw new GradleException("Module version ${base} was already used; advance mod_version as well as scala_version")
+    }
+}
+
+def validateRelease(String version, Map environment) {
+    def required = ['MAVEN_URL', 'MAVEN_USERNAME', 'MAVEN_PASSWORD', 'CURSEFORGE_API_KEY',
+                    'GITHUB_TOKEN', 'GITHUB_SHA', 'CHANGELOG']
+    if (environment.MODRINTH_PROJECT_ID) required.add('MODRINTH_TOKEN')
+    def missing = required.findAll { !environment.get(it, '').trim() }
+    if (missing) throw new GradleException("Missing release configuration: ${missing.join(', ')}")
+    if (version.endsWith('.local')) throw new GradleException('Cannot publish a .local version; use -PpublishRelease')
+    if (environment.GITHUB_REPOSITORY != 'FabricMC/fabric-language-scala') {
+        throw new GradleException('Official releases must run in FabricMC/fabric-language-scala')
+    }
+    if (!environment.MAVEN_URL.startsWith('https://')) throw new GradleException('The remote Maven repository must use HTTPS')
+}
+
+def latestStable(String metadata) {
+    def versions = new XmlSlurper().parseText(metadata).versioning.versions.version.collect { it.text() }
+    def stable = versions.findAll { it ==~ /3\.\d+\.\d+/ }
+    if (stable.isEmpty()) throw new GradleException('No stable Scala 3 versions found')
+    stable.max { a, b -> compareVersions(a, b) }
+}
+
+def compareVersions(String left, String right) {
+    def leftParts = left.tokenize('.').collect { it.toBigInteger() }
+    def rightParts = right.tokenize('.').collect { it.toBigInteger() }
+    for (int index = 0; index < 3; index++) {
+        int comparison = leftParts[index] <=> rightParts[index]
+        if (comparison != 0) return comparison
+    }
+    0
+}
+
+def updateProperties(String contents, String latest) {
+    def current = contents =~ /(?m)^scala_version=(3\.\d+\.\d+)$/
+    def module = contents =~ /(?m)^mod_version=(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.-]+)?$/
+    if (!current.find() || !module.find() || !(latest ==~ /3\.\d+\.\d+/)) {
+        throw new GradleException('Expected pinned Scala 3 and semantic module versions')
+    }
+    if (compareVersions(latest, current.group(1)) <= 0) return contents
+    def nextModule = "${module.group(1)}.${module.group(2)}.${module.group(3).toBigInteger() + 1}${module.group(4) ?: ''}"
+    contents.replaceAll(/(?m)^scala_version=.*$/, "scala_version=${latest}")
+            .replaceAll(/(?m)^mod_version=.*$/, "mod_version=${nextModule}")
+}
+
+def readMetadata(String url) {
+    def connection = URI.create(url).toURL().openConnection()
+    connection.connectTimeout = 30_000
+    connection.readTimeout = 30_000
+    connection.inputStream.withCloseable { it.getText('UTF-8') }
+}
+
+def artifactFile = tasks.named('jar').flatMap { it.archiveFile }
+def pomFile = layout.buildDirectory.file('publications/mavenJava/pom-default.xml')
+def scalaVersion = project.scala_version.toString()
+def modVersion = project.version.toString()
+def loaderVersion = project.loader_version.toString()
+def releaseEnvironment = System.getenv()
+def propertiesFile = file('gradle.properties')
+
+tasks.register('verifyArtifact') {
+    group = 'verification'
+    description = 'Checks the distributable JAR and exposed Maven dependencies.'
+    dependsOn 'jar', 'generatePomFileForMavenJavaPublication'
+    doLast {
+        verifyArtifact(artifactFile.get().asFile, scalaVersion, modVersion, loaderVersion, pomFile.get().asFile)
+        logger.lifecycle("Verified ${artifactFile.get().asFile}")
+    }
+}
+
+tasks.register('validateRelease') {
+    group = 'publishing'
+    doLast { validateRelease(modVersion, releaseEnvironment) }
+}
+
+tasks.register('checkVersion') {
+    group = 'publishing'
+    description = 'Rejects duplicate release versions and reused module versions.'
+    mustRunAfter 'validateRelease'
+    doLast {
+        checkVersion(modVersion, readMetadata('https://maven.fabricmc.net/net/fabricmc/fabric-language-scala/maven-metadata.xml'))
+        logger.lifecycle("Release version check passed for ${modVersion}")
+    }
+}
+
+tasks.register('updateVersions') {
+    group = 'update'
+    doLast {
+        def latest = latestStable(readMetadata('https://repo.maven.apache.org/maven2/org/scala-lang/scala3-library_3/maven-metadata.xml'))
+        def contents = propertiesFile.getText('UTF-8')
+        def updated = updateProperties(contents, latest)
+        if (updated != contents) {
+            propertiesFile.setText(updated, 'UTF-8')
+            logger.lifecycle("Updated Scala to ${latest}; regenerate templates in a separate Gradle invocation")
+        } else {
+            logger.lifecycle("Scala is already current (${latest})")
+        }
+    }
+}

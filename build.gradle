@@ -1,100 +1,253 @@
+import me.modmuss50.mpp.PublishModTask
+import org.gradle.api.publish.maven.tasks.PublishToMavenRepository
+import net.fabricmc.loom.task.prod.ClientProductionRunTask
+import net.fabricmc.loom.task.prod.ServerProductionRunTask
+
 plugins {
-    id "java-library"
-    id "scala"
-    id "maven-publish"
-    id 'fabric-loom' version '0.10.30'
-    id "com.matthewprenger.cursegradle" version "1.4.0"
+    id 'java-library'
+    id 'scala'
+    id 'maven-publish'
+    id 'net.fabricmc.fabric-loom' version '1.19.2'
+    id 'me.modmuss50.mod-publish-plugin' version '2.2.1'
 }
 
-sourceCompatibility = JavaVersion.VERSION_1_8
-targetCompatibility = JavaVersion.VERSION_1_8
-
-archivesBaseName = project.archives_base_name
 group = project.maven_group
+version = "${project.mod_version}+scala.${project.scala_version}" +
+        (System.getenv('GITHUB_ACTIONS') || providers.gradleProperty('publishRelease').isPresent() ? '' : '.local')
+base.archivesName = project.archives_base_name
 
-version = mod_version
-def ENV = System.getenv()
-version = version + "+scala." + project.scala_version + (ENV.GITHUB_ACTIONS ? "" : ".local")
+repositories {
+    mavenCentral()
+}
+
+loom {
+    mods {
+        scala {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+scala {
+    scalaVersion = project.scala_version
+}
+
+configurations {
+    includeAndExpose
+    api.extendsFrom includeAndExpose
+    include.extendsFrom includeAndExpose
+}
+
+configurations.configureEach {
+    resolutionStrategy.failOnNonReproducibleResolution()
+}
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-
-	include(api("org.scala-lang:scala3-library_3:${project.scala_version}"))
-	// Depended on by scala3
-	include(api("org.scala-lang:scala-library:2.13.6"))
-}
-
-processResources {
-	inputs.property "version", project.version
-
-	filesMatching("fabric.mod.json") {
-		expand "version": project.version
-	}
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    includeAndExpose "org.scala-lang:scala3-library_3:${project.scala_version}"
+    includeAndExpose "org.scala-lang:scala-library:${project.scala_version}"
+    testImplementation "net.fabricmc:fabric-loader-junit:${project.loader_version}"
 }
 
 java {
-	withSourcesJar()
+    toolchain.languageVersion = JavaLanguageVersion.of(25)
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+    withSourcesJar()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 17
+}
+
+tasks.withType(ScalaCompile).configureEach {
+    scalaCompileOptions.additionalParameters = ['-release:17']
+}
+
+processResources {
+    def resourceProperties = [version: project.version.toString(), loader_version: project.loader_version]
+    inputs.properties(resourceProperties)
+    filesMatching('fabric.mod.json') {
+        expand(resourceProperties)
+    }
+}
+
+jar {
+    def archiveName = project.base.archivesName.get()
+    from('LICENSE') {
+        rename { "${it}_${archiveName}" }
+    }
+}
+
+test {
+    useJUnitPlatform()
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(providers.gradleProperty('testJava').getOrElse('25').toInteger())
+    }
+}
+
+[17, 21].each { javaVersion ->
+    tasks.register("testJava${javaVersion}", Test) {
+        group = 'verification'
+        description = "Runs the adapter tests on Java ${javaVersion}."
+        dependsOn testClasses
+        testClassesDirs = sourceSets.test.output.classesDirs
+        classpath = sourceSets.test.runtimeClasspath
+        useJUnitPlatform()
+        // Loom configures output grouping only for the default test task.
+        systemProperty 'fabric.classPathGroups', sourceSets.main.output.asPath
+        javaLauncher = javaToolchains.launcherFor {
+            languageVersion = JavaLanguageVersion.of(javaVersion)
+        }
+    }
 }
 
 publishing {
     publications {
-        maven(MavenPublication) {
-			from components.java
+        mavenJava(MavenPublication) {
+            from components.java
         }
     }
     repositories {
-		repositories {
-			if (ENV.MAVEN_URL) {
-				maven {
-					url ENV.MAVEN_URL
-					credentials {
-						username ENV.MAVEN_USERNAME
-						password ENV.MAVEN_PASSWORD
-					}
-				}
-			}
-		}
-    }
-}
-
-curseforge {
-	if (ENV.CURSEFORGE_API_KEY) {
-		apiKey = ENV.CURSEFORGE_API_KEY
-	}
-
-    project {
-        id = '309275'
-        changelog = 'A changelog can be found at https://github.com/FabricMC/fabric-language-scala/commits/master'
-        releaseType = 'release'
-		addGameVersion '1.17.1'
-        addGameVersion '1.16.5'
-		addGameVersion '1.15.2'
-		addGameVersion '1.14.4'
-		addGameVersion "Fabric"
-
-        mainArtifact(file("${project.buildDir}/libs/${base.archivesBaseName}-${version}.jar")) {
-            displayName = "Fabric Language Scala $version"
+        maven {
+            name = 'test'
+            url = layout.buildDirectory.dir('repo')
         }
     }
+}
 
-    options {
-        forgeGradleIntegration = false
+apply from: 'gradle/maintenance.gradle'
+
+tasks.register('verifyConsumer', JavaExec) {
+    group = 'verification'
+    description = 'Builds two standalone Scala mods against a temporary Maven publication.'
+    dependsOn 'publishMavenJavaPublicationToTestRepository'
+    classpath = files('gradle/wrapper/gradle-wrapper.jar')
+    mainClass = 'org.gradle.wrapper.GradleWrapperMain'
+    jvmArgs '--enable-native-access=ALL-UNNAMED'
+    args '-p', 'examples/scala-mod', 'build', '--warning-mode=fail', '--console=plain',
+            "-Planguage_module_version=${project.version}"
+}
+
+check.dependsOn 'verifyArtifact', 'verifyConsumer'
+
+['server': ServerProductionRunTask, 'client': ClientProductionRunTask].each { environment, taskType ->
+    def runDirectory = layout.buildDirectory.dir("smoke/${environment}")
+    def expectedVersion = project.version.toString()
+    def marker = runDirectory.map { it.file("smoke-${environment}.passed").asFile }
+    tasks.register("prod${environment.capitalize()}", taskType) {
+        group = 'verification'
+        description = "Launches the packaged Scala mods in a production ${environment} and exits after startup."
+        dependsOn 'verifyConsumer', 'verifyArtifact'
+        doFirst {
+            def directory = runDirectory.get().asFile
+            directory.mkdirs()
+            marker.get().delete()
+            if (environment == 'server') {
+                new File(directory, 'eula.txt').text = 'eula=true\n'
+                new File(directory, 'server.properties').text = '''online-mode=false
+server-ip=127.0.0.1
+server-port=0
+view-distance=2
+simulation-distance=2
+level-type=minecraft:flat
+'''
+            }
+        }
+        runDir = runDirectory
+        mods.setFrom(tasks.named('jar'),
+                file('examples/scala-mod/object-mod/build/libs/object-mod-1.0.0.jar'),
+                file('examples/scala-mod/class-mod/build/libs/class-mod-1.0.0.jar'))
+        jvmArgs.addAll('-Xmx2G', '-Dfabric.scala.smokeTest=true', "-Dfabric.scala.expectedVersion=${expectedVersion}")
+        timeout = java.time.Duration.ofMinutes(10)
+        if (environment == 'client') {
+            programArgs.addAll('--username', 'ScalaSmoke', '--version', project.minecraft_version,
+                    '--accessToken', '0', '--uuid', '00000000-0000-4000-8000-000000000000')
+        }
+        doLast {
+            if (!marker.get().isFile() || marker.get().text != expectedVersion) {
+                throw new GradleException("The ${environment} exited without verifying the Scala entrypoints")
+            }
+        }
     }
 }
 
-// A task to ensure that the version being released has not already been released.
-task checkVersion {
-	doFirst {
-		def xml = new URL("https://maven.fabricmc.net/net/fabricmc/fabric-language-scala/maven-metadata.xml").text
-		def metadata = new XmlSlurper().parseText(xml)
-		def versions = metadata.versioning.versions.version*.text();
-		if (versions.contains(version)) {
-			throw new RuntimeException("${version} has already been released!")
-		}
-	}
+def releaseRequested = providers.gradleProperty('publishRelease').isPresent()
+def releaseEnvironment = System.getenv()
+
+publishing.repositories {
+    if (releaseEnvironment.MAVEN_URL) {
+        maven {
+            name = 'fabric'
+            url = releaseEnvironment.MAVEN_URL
+            credentials {
+                username = releaseEnvironment.MAVEN_USERNAME
+                password = releaseEnvironment.MAVEN_PASSWORD
+            }
+        }
+    }
 }
 
-publish.mustRunAfter checkVersion
-project.tasks.curseforge.mustRunAfter checkVersion
+publishMods {
+    file = tasks.named('jar').flatMap { it.archiveFile }
+    changelog = releaseEnvironment.CHANGELOG ?: 'Local publication dry run'
+    type = project.mod_version.contains('-') ? BETA : STABLE
+    displayName = "Fabric Language Scala ${project.version}"
+    modLoaders.add('fabric')
+    dryRun = !releaseRequested
+
+    curseforge {
+        accessToken = providers.environmentVariable('CURSEFORGE_API_KEY')
+        projectId = '309275'
+        minecraftVersions.add(project.minecraft_version)
+        client = true
+        server = true
+    }
+    github {
+        accessToken = providers.environmentVariable('GITHUB_TOKEN')
+        repository = 'FabricMC/fabric-language-scala'
+        commitish = releaseEnvironment.GITHUB_SHA ?: 'scala3'
+    }
+    if (releaseEnvironment.MODRINTH_PROJECT_ID) {
+        modrinth {
+            accessToken = providers.environmentVariable('MODRINTH_TOKEN')
+            projectId = releaseEnvironment.MODRINTH_PROJECT_ID
+            minecraftVersions.add(project.minecraft_version)
+            environment = CLIENT_OR_SERVER
+        }
+    }
+}
+
+tasks.register('releaseChecks') {
+    group = 'publishing'
+    dependsOn 'validateRelease', 'checkVersion', 'check', 'testJava17', 'testJava21', 'prodServer', 'prodClient'
+}
+
+tasks.withType(PublishToMavenRepository).configureEach {
+    if (name.endsWith('ToFabricRepository')) {
+        dependsOn 'releaseChecks'
+    }
+}
+
+tasks.named('publish') {
+    dependsOn 'releaseChecks'
+}
+
+tasks.withType(PublishModTask).configureEach {
+    dependsOn 'verifyArtifact'
+    if (releaseRequested) {
+        dependsOn 'releaseChecks'
+    }
+}
+
+tasks.register('processMDTemplates', Copy) {
+    group = 'documentation'
+    description = 'Regenerates the README and consumer versions from gradle.properties.'
+    from('templates')
+    into(rootDir)
+    rename { it.replace('.template', '') }
+    expand(MOD_VERSION: "${project.mod_version}+scala.${project.scala_version}",
+            SCALA_VERSION: project.scala_version, LOADER_VERSION: project.loader_version,
+            MINECRAFT_VERSION: project.minecraft_version)
+}

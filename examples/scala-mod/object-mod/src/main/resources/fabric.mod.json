@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "scala-example-object",
+  "version": "1.0.0",
+  "name": "Scala Object Example",
+  "environment": "*",
+  "license": "Apache-2.0",
+  "entrypoints": {
+    "main": [{"adapter": "scala", "value": "example.ObjectMod"}],
+    "client": [{"adapter": "scala", "value": "example.ClientMod"}]
+  },
+  "mixins": [
+    {"config": "example.server.mixins.json", "environment": "server"},
+    {"config": "example.client.mixins.json", "environment": "client"}
+  ],
+  "depends": {
+    "fabric-language-scala": ">=${language_module_version}",
+    "fabricloader": ">=${loader_version}",
+    "minecraft": "${minecraft_version}",
+    "java": ">=25"
+  }
+}

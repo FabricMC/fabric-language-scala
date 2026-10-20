@@ -17,3 +17,15 @@
 !/LICENSE
 !/README.md
 !.github
+
+# Revival examples and generated-document inputs.
+!/examples
+!/templates
+
+# Build outputs inside the standalone consumer example.
+build/
+.gradle/
+run/
+.idea/
+*.iml
+.DS_Store

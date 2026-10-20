@@ -16,22 +16,39 @@
 
 package net.fabricmc.language.scala
 
-
-import net.fabricmc.loader.api.{LanguageAdapter, ModContainer}
+import net.fabricmc.loader.api.{LanguageAdapter, LanguageAdapterException, ModContainer}
 
 class ScalaLanguageAdapter extends LanguageAdapter {
 
-  override def create[T](modContainer: ModContainer, s: String, aClass: Class[T]): T = {
+  override def create[T](mod: ModContainer, value: String, typ: Class[T]): T = {
+    if (value == null || value.isBlank || value.contains("::")) {
+      throw new LanguageAdapterException(s"Expected a Scala object or class name, got '$value'")
+    }
+
     try {
-      val objectClass = Class.forName(s + "$")
-      val moduleField = objectClass.getField("MODULE$")
-      val instance = moduleField.get(null).asInstanceOf[T]
-      if (instance == null) throw new NullPointerException
-      instance
+      // Inspect companions without running their initializers unless they are the entrypoint.
+      val moduleClass = try {
+        Class.forName(value + "$", false, getClass.getClassLoader)
+      } catch {
+        case _: ClassNotFoundException => null
+      }
+
+      if (moduleClass != null && typ.isAssignableFrom(moduleClass)) {
+        val instance = moduleClass.getField("MODULE$").get(null)
+        if (instance == null) {
+          throw new LanguageAdapterException(s"Scala object '$value' has a null MODULE$$ instance")
+        }
+        typ.cast(instance)
+      } else {
+        LanguageAdapter.getDefault().create(mod, value, typ)
+      }
     } catch {
-      case _: Exception =>
-        println(s"Unable to find ${aClass.getName}$$MODULE$$")
-        aClass.getConstructor().newInstance()
+      case e: ReflectiveOperationException =>
+        throw new LanguageAdapterException(s"Cannot load Scala entrypoint '$value' as ${typ.getName}", e)
+      case e: LinkageError =>
+        throw new LanguageAdapterException(s"Cannot initialize Scala entrypoint '$value'", e)
+      case e: SecurityException =>
+        throw new LanguageAdapterException(s"Cannot access Scala entrypoint '$value'", e)
     }
   }
 }

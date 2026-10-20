@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "example.smoke",
+  "compatibilityLevel": "JAVA_25",
+  "client": ["ClientSmokeMixin"],
+  "injectors": {"defaultRequire": 1}
+}

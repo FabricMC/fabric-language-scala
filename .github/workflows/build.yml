@@ -1,20 +1,74 @@
 name: Build
-on: [push, pull_request]
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+
 jobs:
-  build:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     strategy:
       matrix:
-        java: [16-jdk, 17-jdk]
-    runs-on: ubuntu-20.04
-    container:
-      image: openjdk:${{ matrix.java }}
-      options: --user root
+        java: [17, 21, 25]
     steps:
-      - uses: actions/checkout@v1
-      - uses: gradle/wrapper-validation-action@v1
-      - run: chmod +x ./gradlew
-      - run: ./gradlew build --stacktrace --warning-mode fail
-      - uses: actions/upload-artifact@v2
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        id: test_java
         with:
-         name: Artifacts
-         path: build/libs/
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 25
+      - uses: gradle/actions/wrapper-validation@v6
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Build, test, and preview releases
+        run: >-
+          ./gradlew build publishMods --warning-mode fail --stacktrace
+          -PtestJava=${{ matrix.java }}
+          -Dorg.gradle.java.installations.paths="${{ steps.test_java.outputs.path }}"
+      - name: Check generated documentation
+        run: |
+          ./gradlew processMDTemplates --warning-mode fail
+          git diff --exit-code -- README.md examples/scala-mod/gradle.properties
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: Scala-Java-${{ matrix.java }}
+          path: |
+            build/libs/
+            build/reports/
+            build/publishMods/
+
+  production:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        side: [Server, Client]
+    timeout-minutes: 20
+    env:
+      LIBGL_ALWAYS_SOFTWARE: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 25
+      - uses: gradle/actions/wrapper-validation@v6
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Install virtual display and software graphics
+        if: matrix.side == 'Client'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1-mesa-dri mesa-vulkan-drivers
+      - name: Launch packaged mods
+        run: ./gradlew prod${{ matrix.side }} --warning-mode fail --stacktrace
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: Production-${{ matrix.side }}
+          path: |
+            build/smoke/**/logs/
+            build/smoke/**/crash-reports/
+            build/smoke/**/*.passed

@@ -4,6 +4,18 @@
   "name": "Fabric Language Scala",
   "description": "Fabric language module for Scala.",
   "version": "${version}",
+  "environment": "*",
+  "authors": ["FabricMC"],
+  "license": "Apache-2.0",
+  "contact": {
+    "homepage": "https://github.com/FabricMC/fabric-language-scala",
+    "sources": "https://github.com/FabricMC/fabric-language-scala",
+    "issues": "https://github.com/FabricMC/fabric-language-scala/issues"
+  },
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "java": ">=17"
+  },
   "languageAdapters": {
     "scala": "net.fabricmc.language.scala.ScalaLanguageAdapter"
   }
